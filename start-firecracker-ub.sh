@@ -5,11 +5,12 @@ set -euo pipefail
 SB_ID="${1:-0}" # Default to sb_id=0
 
 FC_BINARY="$PWD/resources/firecracker"
-RO_DRIVE="$PWD/resources/rootfs.ext4"
-KERNEL="$PWD/resources/vmlinux"
+RO_DRIVE="$PWD/resources/ubuntu-18.04_3G.ext4"
+KERNEL="$PWD/resources/ubuntu-18.04.vmlinux"
 TAP_DEV="fc-${SB_ID}-tap0"
 
-KERNEL_BOOT_ARGS="init=/sbin/boottime_init panic=1 pci=off nomodules reboot=k tsc=reliable quiet i8042.nokbd i8042.noaux 8250.nr_uarts=0 ipv6.disable=1"
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off"
+#KERNEL_BOOT_ARGS="init=/sbin/boottime_init panic=1 pci=off nomodules reboot=k tsc=reliable quiet i8042.nokbd i8042.noaux 8250.nr_uarts=0 ipv6.disable=1"
 #KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off nomodules i8042.nokbd i8042.noaux ipv6.disable=1"
 
 API_SOCKET="/tmp/firecracker-sb${SB_ID}.sock"
@@ -34,29 +35,41 @@ curl_put() {
 }
 
 logfile="$PWD/output/fc-sb${SB_ID}-log"
-#metricsfile="$PWD/output/fc-sb${SB_ID}-metrics"
 metricsfile="/dev/null"
 
 touch "$logfile"
 
 # Setup TAP device that uses proxy ARP
 MASK_LONG="255.255.255.252"
-#MASK_SHORT="/30"
 FC_IP="$(printf '169.254.%s.%s' $(((4 * SB_ID + 1) / 256)) $(((4 * SB_ID + 1) % 256)))"
 TAP_IP="$(printf '169.254.%s.%s' $(((4 * SB_ID + 2) / 256)) $(((4 * SB_ID + 2) % 256)))"
 FC_MAC="$(printf '02:FC:00:00:%02X:%02X' $((SB_ID / 256)) $((SB_ID % 256)))"
-#ip link del "$TAP_DEV" 2> /dev/null || true
-#ip tuntap add dev "$TAP_DEV" mode tap
-#sysctl -w net.ipv4.conf.${TAP_DEV}.proxy_arp=1 > /dev/null
-#sysctl -w net.ipv6.conf.${TAP_DEV}.disable_ipv6=1 > /dev/null
-#ip addr add "${TAP_IP}${MASK_SHORT}" dev "$TAP_DEV"
-#ip link set dev "$TAP_DEV" up
 
 KERNEL_BOOT_ARGS="${KERNEL_BOOT_ARGS} ip=${FC_IP}::${TAP_IP}:${MASK_LONG}::eth0:off"
 
 # Start Firecracker API server
 rm -f "$API_SOCKET"
-"${FC_BINARY}" --api-sock "$API_SOCKET" --id "${SB_ID}" --boot-timer >> "$logfile" &
+core_num="$((SB_ID % 192))"
+
+X=$core_num
+#find numa number 
+if ((X<96))
+then 
+  if ((X>=0 && X<=47))
+  then
+    snum=0
+  else
+    snum=1
+  fi
+elif ((X<=143))
+then
+    snum=0
+else
+   snum=1
+fi 
+
+numactl --physcpubind=$core_num --membind=$snum "${FC_BINARY}" --api-sock "$API_SOCKET" --id "${SB_ID}" --boot-timer >> "$logfile" &
+#"${FC_BINARY}" --api-sock "$API_SOCKET" --id "${SB_ID}" --boot-timer >> "$logfile" &
 
 sleep 0.015s
 
@@ -81,12 +94,13 @@ curl_put '/metrics' <<EOF
 }
 EOF
 
-#curl_put '/machine-config' <<EOF
-#{
-#  "vcpu_count": 1,
-#  "mem_size_mib": 128
-#}
-#EOF
+
+curl_put '/machine-config' <<EOF
+{
+  "vcpu_count": 1,
+  "mem_size_mib": 1024
+}
+EOF
 
 curl_put '/boot-source' <<EOF
 {
@@ -100,7 +114,7 @@ curl_put '/drives/1' <<EOF
   "drive_id": "1",
   "path_on_host": "$RO_DRIVE",
   "is_root_device": true,
-  "is_read_only": true
+  "is_read_only": false
 }
 EOF
 #

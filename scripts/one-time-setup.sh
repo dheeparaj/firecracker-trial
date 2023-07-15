@@ -15,4 +15,4 @@ sudo sysctl -wq net.ipv4.neigh.default.gc_thresh3=4096
 
 
 # Download relevant resources.
-./ensure_resources.sh
+#./ensure_resources.sh

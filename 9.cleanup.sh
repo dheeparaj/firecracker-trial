@@ -4,7 +4,7 @@ set -euo pipefail
 
 COUNT=$(find /sys/class/net/* | wc -l)
 
-killall iperf3
+#killall iperf3
 killall firecracker
 
 for ((i=0; i<COUNT; i++))

@@ -7,7 +7,8 @@ set -euo pipefail
 
 start="${1:-0}"
 upperlim="${2:-1}"
+SCRIPT="start-firecracker-ub.sh"
 
 for ((i=start; i<upperlim; i++)); do
-  ./start-firecracker.sh "$i" || echo "Could not start Firecracker! Check Log content (i.e output/fc-sb$i-log)"
+  ./$SCRIPT "$i" || echo "Could not start Firecracker! Check Log content (i.e output/fc-sb$i-log)"
 done
