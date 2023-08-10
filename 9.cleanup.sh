@@ -5,7 +5,11 @@ set -euo pipefail
 COUNT=$(find /sys/class/net/* | wc -l)
 
 #killall iperf3
-killall firecracker
+FC_CNT=$(ps -ef | grep firecracker | wc -l)
+if [[ $FC_CNT -gt 1 ]]
+then
+  killall firecracker
+fi
 
 for ((i=0; i<COUNT; i++))
 do
